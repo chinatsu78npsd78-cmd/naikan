@@ -367,14 +367,20 @@ const VIEWS = {
       ${R.rows.map(([h, v]) => `<h3>${esc(h)}</h3><p class="val">${esc(v)}</p>`).join("")}
       <h3>今日のあなたへ</h3><p class="val">${esc(R.message)}</p></div>
       <div class="btns no-print">
-        <button class="btn primary" data-act="copy-data">②をコピー（なつこさんへ送る用）</button>
         <button class="btn" data-act="copy-card">カードの文章をコピー</button>
         <button class="btn" data-act="download">テキストで保存</button>
         <button class="btn" data-act="print">印刷する</button>
       </div>
-      <div class="card no-print" style="margin-top:16px"><p class="q">②なつこさん確認用・内観深掘りデータ</p>
-      <p class="note">内容を確認して、直したいところがあれば「ひとつ前に戻る」で書き直せます。問題なければ、上のボタンでコピーして、なつこさんへ送ってください😊</p>
-      <pre class="data">${esc(R.data)}</pre>
+      <div class="card no-print" style="margin-top:16px"><p class="q">②なつこさんへ送る</p>
+      <label class="field"><span>生年月日（例：1985年4月12日）</span>
+        <input type="text" id="birth" inputmode="text" autocomplete="bday" value="${esc(S.birth || "")}" placeholder="答えたくなければ空欄で大丈夫です"></label>
+      <p class="note">送る内容（直したいところがあれば「ひとつ前に戻る」で書き直せます）</p>
+      <pre class="data" id="data">${esc(R.data)}</pre>
+      <div class="btns col">
+        <button class="btn primary" data-act="send-line">LINEでなつこさんに送る</button>
+        <button class="btn" data-act="copy-data">②をコピーする</button>
+      </div>
+      <p class="note">「LINEでなつこさんに送る」を押すと、内容をコピーしてから公式LINEのトーク画面を開きます。文字が入っていれば、そのまま送信してください。入っていない時は、入力欄を長押しして「ペースト（貼り付け）」してから送信してください。</p>
       ${S.early || isExpired() ? "" : `<button class="link" data-act="result-back">← ひとつ前に戻る</button>`}</div>
       <p class="note no-print" style="text-align:center;margin-top:16px">今日は、ご自身の内側を見つめてくださって、ありがとうございました。<br>怖さを見つめるのは、とてもエネルギーを使うことです。どうか、あたたかくして休んでくださいね。</p>`;
   },
@@ -418,6 +424,8 @@ function buildResult() {
     "※本人が書いた内容と、本人が確かめた内容のみ（AIなし版）",
     "",
     "【実施日】", "・" + S.date,
+    "",
+    "【生年月日】", "・" + (S.birth && S.birth.trim() ? S.birth.trim() : "未記入"),
     "",
     "【入口】",
     "・入り方：" + (entry ? entry.label : "未選択"),
@@ -652,6 +660,7 @@ const ACTIONS = {
   "result-back": () => { S.stage = "after"; },
   "expired-summary": () => { S.early = true; S.stage = "result"; },
   "copy-data": () => { copy(buildResult().data); return "skip"; },
+  "send-line": () => { sendLine(); return "skip"; },
   "copy-card": () => { copy(buildResult().card); return "skip"; },
   download: () => {
     const R = buildResult();
@@ -680,13 +689,30 @@ function readPreps() {
   document.querySelectorAll("[data-prep]").forEach((el) => { S.preps[Number(el.dataset.prep)] = el.value.trim(); });
 }
 
-async function copy(text) {
+async function copy(text, quiet) {
   try {
     await navigator.clipboard.writeText(text);
-    toast("コピーしました");
+    if (!quiet) toast("コピーしました");
+    return true;
   } catch (e) {
-    overlay(`<p class="q">コピーできませんでした</p><p class="note">下の文字を長押しして選んでください。</p><pre class="data">${esc(text)}</pre><div class="btns"><button class="btn primary" data-act="close">閉じる</button></div>`);
+    if (!quiet) overlay(`<p class="q">コピーできませんでした</p><p class="note">下の文字を長押しして選んでください。</p><pre class="data">${esc(text)}</pre><div class="btns"><button class="btn primary" data-act="close">閉じる</button></div>`);
+    return false;
   }
+}
+
+// 公式LINE（内観のURLを送っているアカウント）のトーク画面を、②の文章を入れた状態で開く
+const LINE_MAX_URL = 8000; // 長すぎる時は文字を入れずに開き、貼り付けてもらう
+async function sendLine() {
+  const id = (typeof SETTINGS === "object" && SETTINGS.lineId) || "@ago3626r";
+  const text = buildResult().data;
+  const copied = await copy(text, true);
+  const base = `https://line.me/R/oaMessage/${encodeURIComponent(id)}/`;
+  const withText = `${base}?${encodeURIComponent(text)}`;
+  const url = withText.length <= LINE_MAX_URL ? withText : base;
+  toast(url === base
+    ? (copied ? "コピーしました。LINEで貼り付けて送ってください" : "LINEを開きます")
+    : "LINEを開きます");
+  setTimeout(() => { window.location.href = url; }, 600);
 }
 
 document.addEventListener("click", (ev) => {
@@ -710,6 +736,12 @@ document.addEventListener("input", (ev) => {
     save();
   } else if (el.id === "ans") {
     S.draft = el.value; save();
+  } else if (el.id === "birth") {
+    // 生年月日を入れたら、送る内容にすぐ反映する
+    S.birth = el.value;
+    const d = document.getElementById("data");
+    if (d) d.textContent = buildResult().data;
+    save();
   }
 });
 
