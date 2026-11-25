@@ -703,7 +703,7 @@ async function copy(text, quiet) {
 // 公式LINE（内観のURLを送っているアカウント）のトーク画面を、②の文章を入れた状態で開く
 const LINE_MAX_URL = 8000; // 長すぎる時は文字を入れずに開き、貼り付けてもらう
 async function sendLine() {
-  const id = (typeof SETTINGS === "object" && SETTINGS.lineId) || "@ago3626r";
+  const id = (typeof SETTINGS === "object" && SETTINGS.lineId) || "@962fnwca";
   const text = buildResult().data;
   const copied = await copy(text, true);
   const base = `https://line.me/R/oaMessage/${encodeURIComponent(id)}/`;
